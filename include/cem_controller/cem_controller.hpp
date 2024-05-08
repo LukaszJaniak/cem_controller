@@ -37,6 +37,7 @@
 #include "tier4_debug_msgs/msg/float32_multi_array_stamped.hpp"
 
 #include <boost/optional.hpp>  // To be replaced by std::optional in C++17
+#include "chrono"
 
 #include <memory>
 #include <vector>
@@ -74,14 +75,17 @@ public:
   double dst;
   double Lf; 
   double Lfc= 1.0;
+  double m_longitudinal_ctrl_period=0.03;
   // double Lfc= 2.0;
   double k;
   double dt;
   double v;
+  // std::chrono::steady_clock::time_point last_run_time_;
   double yawFromPose(const geometry_msgs::msg::Pose& pose);
   double yaw;
   double cemSteerControl(const geometry_msgs::msg::Pose& state, double Lf, const autoware_auto_planning_msgs::msg::TrajectoryPoint& target_state);
-  
+  std::shared_ptr<rclcpp::Time> m_prev_control_time{nullptr};
+
   std::vector<double> discreteDynamics(const std::vector<double>& x, const std::vector<double>& u, double dt);
 
   std::vector<std::tuple<double, double, std::vector<double> >> simulateCost( const geometry_msgs::msg::Pose& state, const autoware_auto_planning_msgs::msg::TrajectoryPoint& targetState );
@@ -95,6 +99,7 @@ public:
   double acc;
   bool calcIsSteerConverged(const AckermannLateralCommand & cmd, const autoware_auto_vehicle_msgs::msg::SteeringReport& stering,double converged_steer_rad_);
   double getAction(const std::vector<std::tuple<double, double, std::vector<double>>>& cost_tuple_list, int elite_size);
+  double getDt();
 private:
   rclcpp::Clock::SharedPtr clock_;
   rclcpp::Logger logger_;

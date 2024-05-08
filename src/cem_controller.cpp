@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "cem_controller/cem_controller.hpp"
+#include <chrono>
 
 #include <iostream>
 #include <random>
@@ -39,6 +40,11 @@ CemLateralController::CemLateralController(rclcpp::Node & node)
 : clock_(node.get_clock()),
 logger_(node.get_logger().get_child("lateral_controller"))
 {
+
+  // dt = node.declare_parameter<double>("dt");  
+  // k = node.declare_parameter<double>("k");
+  // Lfc = node.declare_parameter<double>("Lfc");
+
   converged_steer_rad_ = node.declare_parameter<double>("converged_steer_rad");
   mu = 0.0; 
   sigma = 0.9;
@@ -46,8 +52,22 @@ logger_(node.get_logger().get_child("lateral_controller"))
   yaw = 0.0;
   v = 0.0;
   acc=0.0;
-  dt= 0.005;
-  k= 0.1;//wcześniej 0.008
+  dt= 0.008;
+  Lfc= 1.4;
+  k= 0.1;
+  // k= 1.0;
+
+  m_longitudinal_ctrl_period=0.03;
+
+
+  // dt = node.declare_parameter<double>("dt");  
+  // k = node.declare_parameter<double>("k");
+  // Lfc = node.declare_parameter<double>("Lfc");
+  //   dt= 0.0055;
+  // k= 0.1;
+  // std::chrono::steady_clock::time_point last_run_time_;
+
+  //wcześniej 0.008
   //   dt= 0.0055;
   // k= 0.001;
 }
@@ -76,11 +96,23 @@ LateralOutput CemLateralController::run( [[maybe_unused]] const InputData & inpu
 
 
 // ============
+  // auto current_time = std::chrono::steady_clock::now();
+  // dt = static_cast<double>(std::chrono::duration_cast<std::chrono::seconds>(current_time - last_run_time_).count());
+  // last_run_time_ = current_time;
+  // double curnet_Double = static_cast<double>(std::chrono::steady_clock::now());
+  // RCLCPP_INFO(logger_, "DDDTTT: %f", curnet_Double);
+  dt=getDt();
+  // RCLCPP_INFO(logger_, "DDDTTT: %f", dt);
   dst = calc_distance(input_tp_array[target_idx].pose.position.x, input_tp_array[target_idx].pose.position.y, current_pose_.position.x, current_pose_.position.y ) ;
   Lf = Lfc + k * current_odometry_.twist.twist.linear.x;
-  acc = (current_odometry_.twist.twist.linear.x - v) /0.0055;
-  // RCLCPP_INFO(logger_, "acceleration YYYYYYYYY: %f", acc);
+  if(v!=current_odometry_.twist.twist.linear.x){
+    acc = (current_odometry_.twist.twist.linear.x - v) /dt;
+  }
+  RCLCPP_INFO(logger_, "acceleration YYYYYYYYY: %f", acc);
+  RCLCPP_INFO(logger_, "velocity YYYYYYYYY: %f", v);
+  RCLCPP_INFO(logger_, "curnet  VVVV: %f",current_odometry_.twist.twist.linear.x);
 
+// std::clamp((3.0-v), 0.0, 3.0) +
   v=current_odometry_.twist.twist.linear.x;
   // RCLCPP_INFO(logger_, "velocity YYYYYYYYY: %f", v);
 
@@ -114,6 +146,22 @@ LateralOutput CemLateralController::run( [[maybe_unused]] const InputData & inpu
 
   
   return output;
+}
+
+
+double CemLateralController::getDt()
+{
+  double dt;
+  if (!m_prev_control_time) {
+    dt = m_longitudinal_ctrl_period;
+    m_prev_control_time = std::make_shared<rclcpp::Time>(clock_->now());
+  } else {
+    dt = (clock_->now() - *m_prev_control_time).seconds();
+    *m_prev_control_time = clock_->now();
+  }
+  const double max_dt = m_longitudinal_ctrl_period * 2.0;
+  const double min_dt = m_longitudinal_ctrl_period * 0.5;
+  return std::max(std::min(dt, max_dt), min_dt);
 }
 
 
@@ -152,6 +200,7 @@ double CemLateralController::cemSteerControl(const geometry_msgs::msg::Pose& sta
             delta = getAction(cost_tuple_list, elite_size);
         }
     }
+    mu = 0.0;
     return delta; 
 }
 
