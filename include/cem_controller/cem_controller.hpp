@@ -70,36 +70,44 @@ public:
   explicit CemLateralController(rclcpp::Node & node);
   int64_t fun(int64_t bar) const;
 
+
   int target_idx=15;
   double calc_distance(double x_,double y_,double x,double y);
   double dst;
   double Lf; 
-  double Lfc= 1.0;
-  double m_longitudinal_ctrl_period=0.03;
-  // double Lfc= 2.0;
-  double k;
-  double dt;
-  double v;
-  // std::chrono::steady_clock::time_point last_run_time_;
-  double yawFromPose(const geometry_msgs::msg::Pose& pose);
-  double yaw;
-  double cemSteerControl(const geometry_msgs::msg::Pose& state, double Lf, const autoware_auto_planning_msgs::msg::TrajectoryPoint& target_state);
-  std::shared_ptr<rclcpp::Time> m_prev_control_time{nullptr};
+  double Lfc = 1.0;
+  double m_longitudinal_ctrl_period = 0.01;
+  double k = 0.58;
+  double dt = 0.008;
+  double v = 0.0;
+  double di;
+  double mu = 0.0;
+  double sigma = 0.9;
+  double sigma_shrink = 0.95;
+  double converged_steer_rad_;
+  double acc = 0.0;
+  double yaw = 0.0;
 
+  double yawFromPose(const geometry_msgs::msg::Pose& pose);
+  double cemSteerControl(const geometry_msgs::msg::Pose& state, double Lf, const 
+
+  autoware_auto_planning_msgs::msg::TrajectoryPoint& target_state);
+
+  std::shared_ptr<rclcpp::Time> m_prev_control_time{nullptr};
+  
   std::vector<double> discreteDynamics(const std::vector<double>& x, const std::vector<double>& u, double dt);
 
   std::vector<std::tuple<double, double, std::vector<double> >> simulateCost( const geometry_msgs::msg::Pose& state, const autoware_auto_planning_msgs::msg::TrajectoryPoint& targetState );
 
   double randomSteer(double mu, double sigma);
-  double di;
-  double mu;
-  double sigma;
-  double sigma_shrink;
-  double converged_steer_rad_;
-  double acc;
+
   bool calcIsSteerConverged(const AckermannLateralCommand & cmd, const autoware_auto_vehicle_msgs::msg::SteeringReport& stering,double converged_steer_rad_);
+
   double getAction(const std::vector<std::tuple<double, double, std::vector<double>>>& cost_tuple_list, int elite_size);
+
   double getDt();
+
+
 private:
   rclcpp::Clock::SharedPtr clock_;
   rclcpp::Logger logger_;

@@ -34,46 +34,16 @@ int64_t CemController::foo(int64_t bar) const
 
 // =====================
 // ros2 launch f1tenth_launch e2e_simulator.launch.py
-//colcon build --packages-select
+//colcon build --packages-select cem_controller
 //cp -r autoware_map /root
+
 CemLateralController::CemLateralController(rclcpp::Node & node)
 : clock_(node.get_clock()),
 logger_(node.get_logger().get_child("lateral_controller"))
 {
-
-  // dt = node.declare_parameter<double>("dt");  
-  // k = node.declare_parameter<double>("k");
-  // Lfc = node.declare_parameter<double>("Lfc");
-
   converged_steer_rad_ = node.declare_parameter<double>("converged_steer_rad");
-  mu = 0.0; 
-  sigma = 0.9;
-  sigma_shrink = 0.85;
-  yaw = 0.0;
-  v = 0.0;
-  acc=0.0;
-  dt= 0.008;
-  Lfc= 1.4;
-  k= 0.1;
-  // k= 1.0;
-
-  m_longitudinal_ctrl_period=0.03;
-
-
-  // dt = node.declare_parameter<double>("dt");  
-  // k = node.declare_parameter<double>("k");
-  // Lfc = node.declare_parameter<double>("Lfc");
-  //   dt= 0.0055;
-  // k= 0.1;
-  // std::chrono::steady_clock::time_point last_run_time_;
-
-  //wcześniej 0.008
-  //   dt= 0.0055;
-  // k= 0.001;
 }
-// jedno z lepszych ale slam zile działa
-  // dt= 0.0055;
-  // k= 0.01;
+
 bool CemLateralController::isReady([[maybe_unused]] const InputData & input_data)
 {
   return true;
@@ -86,35 +56,20 @@ LateralOutput CemLateralController::run( [[maybe_unused]] const InputData & inpu
   current_odometry_ = input_data.current_odometry;
   current_steering_ = input_data.current_steering;
 
-
-  // RCLCPP_WARN_THROTTLE(logger_, *clock_, 5000,"CEMMMMMMMMMMMMM3333-------------CEMMMMMMMMMM3333!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" );
   const auto input_tp_array = motion_utils::convertToTrajectoryPointArray(trajectory_);
   int array_size = static_cast<int>(input_tp_array.size());
-  // for (const auto& point : input_tp_array) {
-  //   RCLCPP_INFO(logger_, "Point: x=%f, y=%f, z=%f", point.pose.position.x, point.pose.position.y, point.pose.position.z);
-  // } 
 
-
-// ============
-  // auto current_time = std::chrono::steady_clock::now();
-  // dt = static_cast<double>(std::chrono::duration_cast<std::chrono::seconds>(current_time - last_run_time_).count());
-  // last_run_time_ = current_time;
-  // double curnet_Double = static_cast<double>(std::chrono::steady_clock::now());
-  // RCLCPP_INFO(logger_, "DDDTTT: %f", curnet_Double);
-  dt=getDt();
-  // RCLCPP_INFO(logger_, "DDDTTT: %f", dt);
   dst = calc_distance(input_tp_array[target_idx].pose.position.x, input_tp_array[target_idx].pose.position.y, current_pose_.position.x, current_pose_.position.y ) ;
+
+  Lfc = std::max( 1.2, Lfc * (current_odometry_.twist.twist.linear.x / 10.0));
+  k = std::max(0.065, k * (current_odometry_.twist.twist.linear.x / 10.0));
   Lf = Lfc + k * current_odometry_.twist.twist.linear.x;
+
   if(v!=current_odometry_.twist.twist.linear.x){
     acc = (current_odometry_.twist.twist.linear.x - v) /dt;
   }
-  RCLCPP_INFO(logger_, "acceleration YYYYYYYYY: %f", acc);
-  RCLCPP_INFO(logger_, "velocity YYYYYYYYY: %f", v);
-  RCLCPP_INFO(logger_, "curnet  VVVV: %f",current_odometry_.twist.twist.linear.x);
 
-// std::clamp((3.0-v), 0.0, 3.0) +
   v=current_odometry_.twist.twist.linear.x;
-  // RCLCPP_INFO(logger_, "velocity YYYYYYYYY: %f", v);
 
   while (dst < Lf ) {
     target_idx++;
@@ -122,29 +77,19 @@ LateralOutput CemLateralController::run( [[maybe_unused]] const InputData & inpu
         target_idx =0;
     }
     dst = calc_distance(input_tp_array[target_idx].pose.position.x, input_tp_array[target_idx].pose.position.y, current_pose_.position.x, current_pose_.position.y ) ;
-    // RCLCPP_INFO(logger_, "Wartość zmiennej while!!!!!!: %f", dst);
   } 
-//   RCLCPP_INFO(logger_, "target XXXXX!!!!!!: %f", input_tp_array[target_idx].pose.position.x);
-//   RCLCPP_INFO(logger_, "curent position XXXXX!!!!!!: %f", current_pose_.position.x);
-
-//   RCLCPP_INFO(logger_, "target YYYYYYYYY: %f", input_tp_array[target_idx].pose.position.y);
-//   RCLCPP_INFO(logger_, "curent position YYYYYYYYYYY: %f", current_pose_.position.y);
 
 
   yaw=yawFromPose(current_pose_);
-
   di=cemSteerControl(current_pose_, Lf, input_tp_array[target_idx]);
-//   RCLCPP_INFO(logger_, "stering tire angle !!!!!!: %f",di);
-//   RCLCPP_INFO(logger_, "target index: %d", target_idx);
 
   AckermannLateralCommand  cmd_msg;
   LateralOutput output;
+
   cmd_msg.stamp = clock_->now();
   cmd_msg.steering_tire_angle=di;
   output.control_cmd = cmd_msg;
-//   output.sync_data.is_steer_converged = calcIsSteerConverged(cmd_msg, current_steering_,converged_steer_rad_);
 
-  
   return output;
 }
 
@@ -169,8 +114,8 @@ double CemLateralController::getDt()
 
 double CemLateralController::calc_distance(double x_,double y_,double x,double y) 
 {
-    double dx = x_ - x; // Obliczenie różnicy między x-ami
-    double dy = y_ - y; // Obliczenie różnicy między y-ami
+    double dx = x_ - x; 
+    double dy = y_ - y; 
     return std::sqrt(dx * dx + dy * dy); 
 }
 
@@ -185,8 +130,8 @@ double CemLateralController::yawFromPose(const geometry_msgs::msg::Pose& pose) {
 
 
 double CemLateralController::cemSteerControl(const geometry_msgs::msg::Pose& state, double Lf, const autoware_auto_planning_msgs::msg::TrajectoryPoint& target_state) {
-    const int iter_cem = 15; 
-    const int elite_size = 10; 
+    const int iter_cem = 16; 
+    const int elite_size = 7; 
     sigma = 1.0; 
 
     double delta = 2.0;
@@ -206,7 +151,6 @@ double CemLateralController::cemSteerControl(const geometry_msgs::msg::Pose& sta
 
 double CemLateralController::getAction(const std::vector<std::tuple<double, double, std::vector<double>>>& cost_tuple_list, int elite_size) {
     std::vector<double> elites;
-    // double sigma = 1.0; 
 
     for (const auto& tuple_item : cost_tuple_list) {
         elites.push_back(std::get<1>(tuple_item));
@@ -225,11 +169,12 @@ double CemLateralController::getAction(const std::vector<std::tuple<double, doub
 }
 
 std::vector<double> CemLateralController::discreteDynamics(const std::vector<double>& x, const std::vector<double>& u, double dt) {
+
     double yaw = x[2];
     double v = x[3];
-
     double acceleration = u[0];
     double steering = u[1];
+
     steering = std::min(std::max(steering, -0.62), 0.62); 
 
     std::vector<double> x_next{
@@ -250,25 +195,17 @@ std::vector<double> CemLateralController::discreteDynamics(const std::vector<dou
 
 std::vector<std::tuple<double, double, std::vector<double>>> CemLateralController::simulateCost( const geometry_msgs::msg::Pose& state, const autoware_auto_planning_msgs::msg::TrajectoryPoint& targetState ) {
 
-    // using State = geometry_msgs::msg::Pose;
+    const int iter_cem = 13; 
+    const double cost_err = 0.9;  
+    const int traj_dim = 17;
 
-    const int iter_cem = 20; 
-    const double cost_err = 0.1; 
-    // double mu = 0.0; 
-    // double sigma = 0.9; 
-    const int traj_dim = 30;
     std::vector<double> sim_state;
-
     std::vector<std::tuple<double, double, std::vector<double> >> cost_tuple_list;
-
     std::vector<double> x0 = {state.position.x, state.position.y, yaw, v}; // 
 
     for (int iteration = 0; iteration < iter_cem; ++iteration) {
 
         double steer_angle = randomSteer(mu, sigma);
-
-        // RCLCPP_INFO(logger_, "ranfom stering: %f", steer_angle);
-
        
         std::vector<std::vector<double>> u_trj(traj_dim, std::vector<double>(2, 0.0));
         for (int i = 0; i < traj_dim; ++i) {
@@ -298,7 +235,6 @@ std::vector<std::tuple<double, double, std::vector<double>>> CemLateralControlle
             if (cost <= cost_err) {
                 break;
             }
-
 
             x_trj[n + 1] = x_next;
         }
