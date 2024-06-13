@@ -48,7 +48,6 @@ using autoware::motion::control::trajectory_follower::LateralOutput;
 using autoware_auto_control_msgs::msg::AckermannLateralCommand;
 using autoware_auto_planning_msgs::msg::Trajectory;
 using autoware_auto_planning_msgs::msg::TrajectoryPoint;
-// ====================================
 
 
 
