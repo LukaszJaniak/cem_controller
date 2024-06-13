@@ -32,11 +32,6 @@ int64_t CemController::foo(int64_t bar) const
 }
 
 
-// =====================
-// ros2 launch f1tenth_launch e2e_simulator.launch.py
-//colcon build --packages-select cem_controller
-//cp -r autoware_map /root
-
 CemLateralController::CemLateralController(rclcpp::Node & node)
 : clock_(node.get_clock()),
 logger_(node.get_logger().get_child("lateral_controller"))
@@ -261,7 +256,6 @@ bool CemLateralController::calcIsSteerConverged(const AckermannLateralCommand & 
          static_cast<float>(converged_steer_rad_);
 }
 
-// ===================
 }  // namespace cem_controller
 
 
